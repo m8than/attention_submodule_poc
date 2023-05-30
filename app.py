@@ -2,11 +2,12 @@ from collections import Counter
 import json
 import os
 import numpy as np
+import tensorflow as tf
 import tokenizers
 import keras
 
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, LSTM, Embedding, Dropout
+from tensorflow.keras.layers import Dense, LSTM, Embedding, Dropout, Masking
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 
 cur_dir = os.path.dirname(os.path.realpath(__file__))
@@ -29,20 +30,43 @@ def getModel(from_path=None, ctx_len=100000, embedding_dim=128, vocab_size=50281
         return keras.models.load_model(from_path)
     
     model = Sequential()
+    # mask 0's
+    model.add(Masking(mask_value=0, input_shape=(ctx_len,)))
     model.add(Embedding(input_dim=vocab_size, output_dim=embedding_dim, input_length=ctx_len))
-    model.add(LSTM(128, return_sequences=True))
-    model.add(Dropout(0.2))
+    model.add(LSTM(256, return_sequences=True))
+    model.add(Dropout(0.1))
     
     model.add(LSTM(128, return_sequences=True))
-    model.add(Dropout(0.2))
+    model.add(Dropout(0.1))
     
     model.add(LSTM(128, return_sequences=True))
-    model.add(Dropout(0.2)) 
+    model.add(Dropout(0.1))
     
-    model.add(LSTM(128))
-    model.add(Dense(vocab_size, activation='sigmoid'))
+    model.add(LSTM(256, return_sequences=True))
+    model.add(Dropout(0.1))
     
-    model.compile(optimizer='adam', loss='mean_squared_error', metrics=['accuracy'])
+    model.add(LSTM(256, return_sequences=True))
+    model.add(Dropout(0.1))
+    
+    model.add(LSTM(256))
+    model.add(Dropout(0.1))
+    
+    model.add(Dense(vocab_size, activation='linear'))
+    
+    def masked_loss(y_true, y_pred):
+        loss = tf.keras.losses.mean_squared_error(y_true, y_pred)
+        
+        # mask out any 0's in the y_true
+        mask = tf.cast(tf.not_equal(y_true, 0), tf.float32)
+        
+        # mask out first element
+        mask = mask[:, 1:]
+        
+        masked_loss = loss * mask
+        
+        return tf.reduce_mean(masked_loss)
+    
+    model.compile(optimizer='adam', loss=masked_loss, metrics=['accuracy'])
     return model
         
 def generateInputOutputPairs(input_output_pairs):
@@ -81,18 +105,20 @@ x_train, y_train, x_test, y_test = getXYTrainTest(input_output_pairs, train_size
 
 ctx_len = 100000
 
-x_train = pad_sequences(x_train, maxlen=ctx_len, padding='post')
-x_test = pad_sequences(x_test, maxlen=ctx_len, padding='post')
+x_train = pad_sequences(x_train, maxlen=ctx_len, padding='post', value=0)
+x_test = pad_sequences(x_test, maxlen=ctx_len, padding='post', value=0)
+
 
 y_train = np.array(y_train)
 y_test = np.array(y_test)
+
 
 print(x_train.shape)
 
 model = getModel(ctx_len=ctx_len, vocab_size=vocab_size)
 
 print("Training model...")
-model.fit(x_train, y_train, epochs=5, batch_size=32, verbose=1)
+model.fit(x_train, y_train, epochs=150, batch_size=4, verbose=1, validation_split=0.2)
 
 # Evaluate the model
 test_loss, test_acc = model.evaluate(x_test, y_test, verbose=0)
