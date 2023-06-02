@@ -16,7 +16,7 @@ class OutputShaper(pl.LightningModule):
         )
         
         self.conv_net = nn.Sequential(
-            nn.Conv1d(input_size, hidden_size, kernel_size=3, stride=1, padding=1),
+            nn.Conv1d(hidden_size, hidden_size, kernel_size=3, stride=1, padding=1),
             nn.ReLU(),
             nn.Conv1d(hidden_size, hidden_size, kernel_size=3, stride=1, padding=1),
             nn.ReLU()
@@ -25,15 +25,8 @@ class OutputShaper(pl.LightningModule):
     
     def forward(self, x):
         hidden_out = self.hidden(x)
-        conv_out = self.conv_net(x.unsqueeze(2)).squeeze(2)
-        
-        if hidden_out.size(1) != conv_out.size(1):
-            if hidden_out.size(1) > conv_out.size(1):
-                conv_out = conv_out.unsqueeze(1).expand_as(hidden_out)
-            else:
-                hidden_out = hidden_out.unsqueeze(1).expand_as(conv_out)
-        
-        x = hidden_out + conv_out
+        conv_out = self.conv_net(hidden_out)
+        x = conv_out
         x = self.output(x)
         x = torch.exp(x) / torch.sum(torch.exp(x), dim=1, keepdim=True)
         return x
