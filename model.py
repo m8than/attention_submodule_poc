@@ -1,8 +1,11 @@
+from typing import Any
 from torch import nn, float32
 import torch
 from torch.nn import functional as F
+import pytorch_lightning as pl
+from sophia import SophiaG
 
-class OutputShaper(nn.Module):
+class OutputShaper(pl.LightningModule):
     def __init__(self, input_size, hidden_size, output_size):
         super(OutputShaper, self).__init__()
         self.hidden = nn.Sequential(
@@ -34,6 +37,13 @@ class OutputShaper(nn.Module):
         x = self.output(x)
         x = torch.exp(x) / torch.sum(torch.exp(x), dim=1, keepdim=True)
         return x
+    
+    def training_step(self, batch, batch_idx):
+        x, y, mask = batch
+        yhat = self(x)
+        loss = OutputShaper.loss_fn(yhat, y, mask)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        return loss
     
     @staticmethod
     def loss_fn(yhat, y, mask):

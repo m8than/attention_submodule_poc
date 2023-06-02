@@ -1,3 +1,4 @@
+import torch
 from dataset import TokenLabelDataset
 import os, json
 import pandas as pd
@@ -37,7 +38,6 @@ from model import OutputShaper
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch import nn, save, load, stack
-from sophia import SophiaG
 
 # def collate_fn(batch):
 #     # Separate the inputs (batches of tensors)
@@ -61,43 +61,56 @@ epochs = 3
 batch_size = 16
 
 dataset = TokenLabelDataset(df['text'].values.tolist(), df['output'].values.tolist(), tokenizer)
-dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=32)
+
+
+from sophia import SophiaG
 
 model = OutputShaper(tokenizer.get_vocab_size(), 256, tokenizer.get_vocab_size())
-model.to('cpu')
-
 opt = SophiaG(model.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
+
 loss_fn = nn.CrossEntropyLoss()
 
 from tqdm import tqdm
+import pytorch_lightning as pl
 import wandb
+import deepspeed
+from lightning.pytorch.loggers import WandbLogger
+
 # Training flow
 if __name__ == '__main__':
-    wandb.init(project='output-shaper')
-    for epoch in range(epochs):
-        batch_progress = tqdm(dataloader, desc=f'Epoch {epoch}', position=1)
-        
-        for batch in dataloader:
-            opt.zero_grad()
-            x, y, mask = batch
-            yhat = model(x)
-            loss = OutputShaper.loss_fn(yhat, y, mask)
-            loss.backward()
-            opt.step()
-            
-            if batch_progress.n % 5 == 0:
-                wandb.log({
-                    "loss": loss.item(),
-                    "epoch": epoch,
-                    "step": batch_progress.n
-                })
-            
-            batch_progress.update(1)
-            batch_progress.set_postfix({'loss': loss.item()})
+    pl.seed_everything(42)  # Set a fixed seed for reproducibility
+
+    # Initialize DeepSpeed engine
+    deepspeed_config = {
+        "optimizer": {
+            "type": "Sophia",
+            "params": {
+                "lr": 1e-4
+            }
+        },
+        "fp16": {
+            "enabled": True
+        }
+    }
+    model, optimizer, _, _ = deepspeed.initialize(
+        model=model,
+        optimizer=opt,
+        lr_scheduler=None,
+        config=deepspeed_config
+    )
     
-        # print summary
-    batch_progress.close()
-    
-    with open(cur_dir + '/model.pt', 'wb') as f:
-        save(model.state_dict(), f)
+    wandb_logger = WandbLogger(project="output-shaper")
+    trainer = pl.Trainer(
+        gpus=1,
+        precision='bf16',
+        max_epochs=epochs,
+        logger=wandb_logger
+    )
+
+    trainer.fit(model, train_dataloaders=dataloader)
+
+    # Save the model
+    torch.save(model.state_dict(), "model.pt")
+
     wandb.finish()
