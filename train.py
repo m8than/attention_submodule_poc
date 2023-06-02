@@ -66,7 +66,7 @@ dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_worker
 
 from sophia import SophiaG
 
-model = OutputShaper(tokenizer.get_vocab_size(), 256, tokenizer.get_vocab_size())
+model = OutputShaper(tokenizer.get_vocab_size(), 512, tokenizer.get_vocab_size())
 opt = SophiaG(model.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
 
 loss_fn = nn.CrossEntropyLoss()
