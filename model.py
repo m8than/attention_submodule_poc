@@ -70,17 +70,11 @@ class OutputShaper(pl.LightningModule):
     def configure_optimizers(self):
         return SophiaG(self.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
     
-    def compute_accuracy(self, y_pred, y_true, mask=None):
+    def compute_accuracy(self, y_pred, y_true):
         # Flatten the predictions and true values
         y_pred_flat = y_pred.view(-1, y_pred.size(-1))
         y_true_flat = y_true.view(-1)
-
-        # Apply mask if provided
-        if mask is not None:
-            mask_flat = mask.view(-1).bool()
-            y_pred_flat = y_pred_flat[mask_flat]
-            y_true_flat = y_true_flat[mask_flat]
-
+        
         # Compute accuracy
         _, y_pred_indices = torch.max(y_pred_flat, dim=1)
         correct = torch.eq(y_pred_indices, y_true_flat).sum().item()
