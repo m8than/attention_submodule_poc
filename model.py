@@ -92,7 +92,7 @@ class OutputShaper(pl.LightningModule):
             masked_labels = y_true[mask]
             correct_predictions = torch.sum(masked_predictions == masked_labels).item()
 
-        total_predictions = len(y_true)
+        total_predictions = len(masked_labels) if mask is not None else len(y_true)
         accuracy = correct_predictions / total_predictions
         return accuracy
 
