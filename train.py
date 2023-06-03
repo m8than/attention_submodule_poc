@@ -78,11 +78,13 @@ from lightning.pytorch.loggers import WandbLogger
 if __name__ == '__main__':
     pl.seed_everything(42)  # Set a fixed seed for reproducibility
     
+    wandb.init(project="output-shaper")
+    
     wandb_logger = WandbLogger(project="output-shaper")
     trainer = pl.Trainer(
         precision='bf16',
         max_epochs=epochs,
-        #strategy="deepspeed_stage_3",
+        strategy="deepspeed_stage_3",
         logger=wandb_logger
     )
 
