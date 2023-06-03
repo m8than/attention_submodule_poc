@@ -26,9 +26,6 @@ class OutputShaper(pl.LightningModule):
         
         self.output = nn.Linear(hidden_size, output_size)
         
-        self.average_diversity = []
-        self.average_loss = []
-        
     def forward(self, x):
         c1 = torch.sigmoid(self.channel1_gate(x)) * self.channel1_linear1(x)
         c1 = self.channel1_linear2(torch.relu(c1))
@@ -59,23 +56,38 @@ class OutputShaper(pl.LightningModule):
         self.manual_backward(weighted_loss)
         opt.step()
         
+        # calculate accuracy
+        acc = self.compute_accuracy(yhat, y, mask)
+        
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log('diversity_diff', diversity_diff, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        
-        # every 100 steps wandb log average metrics
-        if batch_idx % 100 == 0:
-            self.average_loss.append(loss)
-            self.average_diversity.append(diversity_diff)
-            wandb.log({"train_loss": torch.mean(torch.stack(self.average_loss)),
-                       "diversity_diff": torch.mean(torch.stack(self.average_diversity))})
-            self.average_loss = []
-            self.average_diversity = []
-        else:
-            self.average_loss.append(loss)
-            self.average_diversity.append(diversity_diff)
+        self.log('accuracy', acc, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+            
+        wandb.log({"train_loss": loss,
+                     "diversity_diff": diversity_diff,
+                        "accuracy": acc})
     
     def configure_optimizers(self):
         return SophiaG(self.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
+    
+    def compute_accuracy(self, y_pred, y_true, mask=None):
+        # Flatten the predictions and true values
+        y_pred_flat = y_pred.view(-1, y_pred.size(-1))
+        y_true_flat = y_true.view(-1)
+
+        # Apply mask if provided
+        if mask is not None:
+            mask_flat = mask.view(-1).bool()
+            y_pred_flat = y_pred_flat[mask_flat]
+            y_true_flat = y_true_flat[mask_flat]
+
+        # Compute accuracy
+        _, y_pred_indices = torch.max(y_pred_flat, dim=1)
+        correct = torch.eq(y_pred_indices, y_true_flat).sum().item()
+        total = y_true_flat.numel()
+        accuracy = correct / total
+
+        return accuracy
 
     def diversity_diff(self):
         # Calculate diversity loss between channel gates
