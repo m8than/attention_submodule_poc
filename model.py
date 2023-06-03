@@ -31,10 +31,10 @@ class OutputShaper(pl.LightningModule):
         
     def forward(self, x):
         c1 = torch.sigmoid(self.channel1_gate(x)) * self.channel1_linear1(x)
-        c1 = self.channel1_linear2(torch.relu(self.channel1_linear1(c1)))
+        c1 = self.channel1_linear2(torch.relu(c1))
         
         c2 = torch.sigmoid(self.channel2_gate(x)) * self.channel2_linear1(x)
-        c2 = self.channel2_linear2(torch.relu(self.channel2_linear1(c2)))
+        c2 = self.channel2_linear2(torch.relu(c2))
         
         context = self.context_linear1(x)
         context = self.context_linear2(torch.relu(context))
