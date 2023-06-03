@@ -63,11 +63,8 @@ batch_size = 16
 dataset = TokenLabelDataset(df['text'].values.tolist(), df['output'].values.tolist(), tokenizer)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=32)
 
-
-from sophia import SophiaG
-
-model = OutputShaper(tokenizer.get_vocab_size(), 512, tokenizer.get_vocab_size())
-opt = SophiaG(model.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
+model = OutputShaper(tokenizer.get_vocab_size(), 64, tokenizer.get_vocab_size())
+# opt = SophiaG(model.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
 
 loss_fn = nn.CrossEntropyLoss()
 
@@ -80,31 +77,12 @@ from lightning.pytorch.loggers import WandbLogger
 # Training flow
 if __name__ == '__main__':
     pl.seed_everything(42)  # Set a fixed seed for reproducibility
-
-    # Initialize DeepSpeed engine
-    deepspeed_config = {
-        "optimizer": {
-            "type": "Sophia",
-            "params": {
-                "lr": 1e-4
-            }
-        },
-        "fp16": {
-            "enabled": True
-        }
-    }
-    model, optimizer, _, _ = deepspeed.initialize(
-        model=model,
-        optimizer=opt,
-        lr_scheduler=None,
-        config=deepspeed_config
-    )
     
     wandb_logger = WandbLogger(project="output-shaper")
     trainer = pl.Trainer(
-        gpus=1,
         precision='bf16',
         max_epochs=epochs,
+        #strategy="deepspeed_stage_3",
         logger=wandb_logger
     )
 
