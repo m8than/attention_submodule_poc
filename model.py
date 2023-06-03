@@ -59,10 +59,13 @@ class OutputShaper(pl.LightningModule):
         self.manual_backward(weighted_loss)
         opt.step()
         
-        if batch_idx != 0:        
-            self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        else:
-            self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
+        # calculate accuracy
+        yhat = torch.argmax(yhat, dim=1)
+        acc = torch.sum(yhat == y) / torch.sum(mask)
+        
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('diversity_diff', diversity_diff, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('accuracy', acc, on_step=True, on_epoch=True, prog_bar=True, logger=True)
             
         # every 100 steps wandb log average metrics
         if batch_idx % 100 == 0:
