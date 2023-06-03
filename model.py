@@ -21,8 +21,6 @@ class OutputShaper(pl.LightningModule):
         
         self.context_linear = nn.Linear(input_size, hidden_size)
         
-        self.accumulate = nn.Linear(hidden_size, hidden_size)
-        
         self.output = nn.Linear(hidden_size, output_size)
         
     def forward(self, x):
@@ -31,9 +29,7 @@ class OutputShaper(pl.LightningModule):
         
         context = self.context_linear(x)
         
-        x = self.accumulate(torch.relu(c1 + c2 + context))
-        
-        x = self.output(x)
+        x = self.output(torch.relu(c1 + c2 + context))
         x = torch.exp(x) / torch.sum(torch.exp(x), dim=1, keepdim=True)
         return x
     
@@ -43,15 +39,35 @@ class OutputShaper(pl.LightningModule):
         yhat = self(x)
         opt.zero_grad()
         loss = OutputShaper.loss_fn(yhat, y, mask)
-        self.manual_backward(loss)
+        
+        # Calculate diversity loss
+        diversity_loss = self.diversity_loss()
+    
+        # Combine primary task loss and diversity loss
+        total_loss = loss + diversity_loss
+        
+        self.manual_backward(total_loss)
         opt.step()
         
+
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        wandb.log({'train_loss': loss})
+        self.log('diversity_loss', diversity_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('total_loss', total_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        wandb.log({'train_loss': loss, 'diversity_loss': diversity_loss, 'total_loss': total_loss})
+
         return loss
     
     def configure_optimizers(self):
         return SophiaG(self.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
+    
+    def diversity_loss(self):
+        # Calculate diversity loss between channel gates
+        channel1_gate_weights = self.channel1_gate.weight
+        channel2_gate_weights = self.channel2_gate.weight
+
+        loss = -torch.mean(torch.abs(torch.mm(channel1_gate_weights, channel2_gate_weights.t())))
+
+        return loss
     
     @staticmethod
     def loss_fn(yhat, y, mask):
