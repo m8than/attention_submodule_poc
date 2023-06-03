@@ -59,8 +59,8 @@ class OutputShaper(pl.LightningModule):
         self.manual_backward(weighted_loss)
         opt.step()
         
-        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True if batch_idx == 0 else False)
-        self.log('diversity_diff', diversity_diff, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True if batch_idx == 0 else False)
+        self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('diversity_diff', diversity_diff, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         
         # every 100 steps wandb log average metrics
         if batch_idx % 100 == 0:
