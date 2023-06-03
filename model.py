@@ -49,7 +49,8 @@ class OutputShaper(pl.LightningModule):
         # Combine primary task loss and diversity loss
         total_loss = loss + diversity_loss
         
-        self.manual_backward(total_loss)
+        weighted_loss = loss * 10 + diversity_loss
+        self.manual_backward(weighted_loss)
         opt.step()
         
 
@@ -62,14 +63,15 @@ class OutputShaper(pl.LightningModule):
             self.average_loss.append(loss)
             self.average_diversity.append(diversity_loss)
             wandb.log({"train_loss": torch.mean(torch.stack(self.average_loss)),
-                       "diversity_loss": torch.mean(torch.stack(self.average_diversity))})
+                       "diversity_loss": torch.mean(torch.stack(self.average_diversity)),
+                       "total_loss": torch.mean(torch.stack(self.average_loss)) + torch.mean(torch.stack(self.average_diversity))})
             self.average_loss = []
             self.average_diversity = []
         else:
             self.average_loss.append(loss)
             self.average_diversity.append(diversity_loss)
 
-        return loss
+        return loss, diversity_loss, total_loss
     
     def configure_optimizers(self):
         return SophiaG(self.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
@@ -78,10 +80,21 @@ class OutputShaper(pl.LightningModule):
         # Calculate diversity loss between channel gates
         channel1_gate_weights = self.channel1_gate.weight
         channel2_gate_weights = self.channel2_gate.weight
+        
+        # get maximum value of channel1_gate_weights
+        channel1_gate_weights_max = torch.max(channel1_gate_weights, dim=1).values
+        channel2_gate_weights_min = torch.min(channel2_gate_weights, dim=1).values
+        
+        # calculate max diversity loss
+        max_diversity_loss = -torch.mean(torch.abs(torch.mm(channel1_gate_weights_max.unsqueeze(0), channel2_gate_weights_min.unsqueeze(0).t())))
 
-        loss = -torch.mean(torch.abs(torch.mm(channel1_gate_weights, channel2_gate_weights.t())))
+        # calculate actual diversity loss
+        actual_diversity_loss = -torch.mean(torch.abs(torch.mm(channel1_gate_weights, channel2_gate_weights.t())))
+        
+        # normalized diversity loss
+        diversity_loss = actual_diversity_loss / max_diversity_loss
 
-        return loss
+        return diversity_loss
     
     @staticmethod
     def loss_fn(yhat, y, mask):
