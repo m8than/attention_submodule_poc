@@ -82,7 +82,7 @@ if __name__ == '__main__':
     trainer = pl.Trainer(
         precision='bf16',
         max_epochs=epochs,
-        #strategy="deepspeed_stage_3",
+        strategy="deepspeed_stage_3",
         logger=wandb_logger
     )
 
