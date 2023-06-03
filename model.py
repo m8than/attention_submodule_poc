@@ -60,8 +60,8 @@ class OutputShaper(pl.LightningModule):
         opt.step()
         
         # calculate accuracy
-        yhat = torch.argmax(yhat, dim=1)
-        acc = torch.sum(yhat == y) / torch.sum(mask)
+        acc = self.compute_accuracy(yhat, y, mask)
+        
         
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log('diversity_diff', diversity_diff, on_step=True, on_epoch=True, prog_bar=True, logger=True)
@@ -82,6 +82,19 @@ class OutputShaper(pl.LightningModule):
     def configure_optimizers(self):
         return SophiaG(self.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
     
+    def compute_accuracy(self, y_pred, y_true, mask=None):
+        predicted_labels = torch.argmax(y_pred, dim=1)
+        correct_predictions = torch.sum(predicted_labels == y_true).item()
+
+        if mask is not None:
+            # Apply the mask to exclude masked elements from accuracy calculation
+            masked_predictions = predicted_labels[mask]
+            masked_labels = y_true[mask]
+            correct_predictions = torch.sum(masked_predictions == masked_labels).item()
+
+        total_predictions = len(y_true)
+        accuracy = correct_predictions / total_predictions
+        return accuracy
 
     def diversity_diff(self):
         # Calculate diversity loss between channel gates
