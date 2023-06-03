@@ -63,9 +63,9 @@ class OutputShaper(pl.LightningModule):
         self.log('diversity_diff', diversity_diff, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log('accuracy', acc, on_step=True, on_epoch=True, prog_bar=True, logger=True)
             
-        wandb.log({"train_loss": loss,
-                     "diversity_diff": diversity_diff,
-                        "accuracy": acc})
+        # wandb.log({"train_loss": loss,
+        #              "diversity_diff": diversity_diff,
+        #                 "accuracy": acc})
     
     def configure_optimizers(self):
         return SophiaG(self.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
