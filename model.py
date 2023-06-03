@@ -44,57 +44,42 @@ class OutputShaper(pl.LightningModule):
         loss = OutputShaper.loss_fn(yhat, y, mask)
         
         # Calculate diversity loss
-        diversity_loss = self.diversity_loss()
-    
-        # Combine primary task loss and diversity loss
-        total_loss = loss + diversity_loss
+        diversity_diff = self.diversity_diff()
         
-        weighted_loss = loss * 10 + diversity_loss
+        diversity_loss = -diversity_diff
+        
+        weighted_loss = loss + diversity_loss * 0.01
         self.manual_backward(weighted_loss)
         opt.step()
         
 
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('diversity_loss', diversity_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log('total_loss', total_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        self.log('diversity_diff', diversity_diff, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         
         # every 100 steps wandb log average metrics
         if batch_idx % 100 == 0:
             self.average_loss.append(loss)
-            self.average_diversity.append(diversity_loss)
+            self.average_diversity.append(diversity_diff)
             wandb.log({"train_loss": torch.mean(torch.stack(self.average_loss)),
-                       "diversity_loss": torch.mean(torch.stack(self.average_diversity)),
-                       "total_loss": torch.mean(torch.stack(self.average_loss)) + torch.mean(torch.stack(self.average_diversity))})
+                       "diversity_diff": torch.mean(torch.stack(self.average_diversity))})
             self.average_loss = []
             self.average_diversity = []
         else:
             self.average_loss.append(loss)
-            self.average_diversity.append(diversity_loss)
-
-        return loss, diversity_loss, total_loss
+            self.average_diversity.append(diversity_diff)
     
     def configure_optimizers(self):
         return SophiaG(self.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
     
-    def diversity_loss(self):
+
+    def diversity_diff(self):
         # Calculate diversity loss between channel gates
         channel1_gate_weights = self.channel1_gate.weight
         channel2_gate_weights = self.channel2_gate.weight
-        
-        # get maximum value of channel1_gate_weights
-        channel1_gate_weights_max = torch.max(channel1_gate_weights, dim=1).values
-        channel2_gate_weights_min = torch.min(channel2_gate_weights, dim=1).values
-        
-        # calculate max diversity loss
-        max_diversity_loss = -torch.mean(torch.abs(torch.mm(channel1_gate_weights_max.unsqueeze(0), channel2_gate_weights_min.unsqueeze(0).t())))
 
-        # calculate actual diversity loss
-        actual_diversity_loss = -torch.mean(torch.abs(torch.mm(channel1_gate_weights, channel2_gate_weights.t())))
-        
-        # normalized diversity loss
-        diversity_loss = actual_diversity_loss / max_diversity_loss
+        loss = torch.mean(torch.abs(torch.mm(channel1_gate_weights, channel2_gate_weights.t())))
 
-        return diversity_loss
+        return loss
     
     @staticmethod
     def loss_fn(yhat, y, mask):
