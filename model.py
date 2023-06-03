@@ -23,6 +23,9 @@ class OutputShaper(pl.LightningModule):
         
         self.output = nn.Linear(hidden_size, output_size)
         
+        self.average_diversity = []
+        self.average_loss = []
+        
     def forward(self, x):
         c1 = torch.sigmoid(self.channel1_gate(x)) * self.channel1_linear(x)
         c2 = torch.sigmoid(self.channel2_gate(x)) * self.channel2_linear(x)
@@ -53,7 +56,18 @@ class OutputShaper(pl.LightningModule):
         self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log('diversity_loss', diversity_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         self.log('total_loss', total_loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        wandb.log({'train_loss': loss, 'diversity_loss': diversity_loss, 'total_loss': total_loss})
+        
+        # every 100 steps wandb log average metrics
+        if batch_idx % 100 == 0:
+            self.average_loss.append(loss)
+            self.average_diversity.append(diversity_loss)
+            wandb.log({"train_loss": torch.mean(torch.stack(self.average_loss)),
+                       "diversity_loss": torch.mean(torch.stack(self.average_diversity))})
+            self.average_loss = []
+            self.average_diversity = []
+        else:
+            self.average_loss.append(loss)
+            self.average_diversity.append(diversity_loss)
 
         return loss
     
