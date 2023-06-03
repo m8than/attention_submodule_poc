@@ -61,7 +61,6 @@ class OutputShaper(pl.LightningModule):
         
         if batch_idx != 0:        
             self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-            self.log('diversity_diff', diversity_diff, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         else:
             self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True, logger=True, sync_dist=True)
             
