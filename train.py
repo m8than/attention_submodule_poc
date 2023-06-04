@@ -63,7 +63,7 @@ batch_size = 16
 dataset = TokenLabelDataset(df['text'].values.tolist(), df['output'].values.tolist(), tokenizer)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=32)
 
-model = OutputShaper(tokenizer.get_vocab_size(), 64, tokenizer.get_vocab_size())
+model = OutputShaper(tokenizer.get_vocab_size(), 96, tokenizer.get_vocab_size())
 # opt = SophiaG(model.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
 
 loss_fn = nn.CrossEntropyLoss()
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     
     wandb_logger = WandbLogger(project="output-shaper")
     trainer = pl.Trainer(
-        precision='bf16',
+        precision='bf16-mixed',
         max_epochs=epochs,
         strategy="deepspeed_stage_3",
         logger=wandb_logger
