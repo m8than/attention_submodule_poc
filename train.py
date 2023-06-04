@@ -63,7 +63,7 @@ batch_size = 16
 dataset = TokenLabelDataset(df['text'].values.tolist(), df['output'].values.tolist(), tokenizer)
 dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=32)
 
-model = OutputShaper(tokenizer.get_vocab_size(), 64, tokenizer.get_vocab_size())
+model = OutputShaper(tokenizer.get_vocab_size(), 96, tokenizer.get_vocab_size())
 # opt = SophiaG(model.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
 
 loss_fn = nn.CrossEntropyLoss()
@@ -73,6 +73,8 @@ import pytorch_lightning as pl
 import wandb
 import deepspeed
 from lightning.pytorch.loggers import WandbLogger
+from pytorch_lightning.callbacks import ModelCheckpoint
+
 
 # Training flow
 if __name__ == '__main__':
@@ -80,12 +82,21 @@ if __name__ == '__main__':
     
     # wandb.init(project="output-shaper")
     
+    checkpoint_callback = ModelCheckpoint(
+        monitor='val_loss',  # Specify the metric to monitor
+        dirpath=cur_dir + 'models',  # Specify the directory to save the models
+        filename='model-{epoch:02d}-{val_loss:.2f}',  # Specify the filename pattern
+        save_top_k=1,  # Save the best model based on the monitored metric
+        mode='min'  # Specify the direction of improvement for the monitored metric
+    )
+
     wandb_logger = WandbLogger(project="output-shaper")
     trainer = pl.Trainer(
-        precision='bf16',
+        precision='bf16-mixed',
         max_epochs=epochs,
         strategy="deepspeed_stage_3",
-        logger=wandb_logger
+        logger=wandb_logger,
+        callbacks=[checkpoint_callback]
     )
 
     trainer.fit(model, train_dataloaders=dataloader)

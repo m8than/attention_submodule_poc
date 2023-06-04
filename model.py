@@ -29,15 +29,19 @@ class OutputShaper(pl.LightningModule):
     def forward(self, x):
         c1 = torch.sigmoid(self.channel1_gate(x)) * self.channel1_linear1(x)
         c1 = self.channel1_linear2(torch.relu(c1))
+        c1 = F.dropout(c1, p=0.5, training=self.training)
         
         c2 = torch.sigmoid(self.channel2_gate(x)) * self.channel2_linear1(x)
         c2 = self.channel2_linear2(torch.relu(c2))
+        c2 = F.dropout(c2, p=0.5, training=self.training)
         
         context = self.context_linear1(x)
         context = self.context_linear2(torch.relu(context))
+        context = F.dropout(context, p=0.5, training=self.training) 
         
         x = self.output(torch.relu(c1 + c2 + context))
         x = torch.exp(x) / torch.sum(torch.exp(x), dim=1, keepdim=True)
+        
         return x
     
     def training_step(self, batch, batch_idx):
@@ -54,6 +58,10 @@ class OutputShaper(pl.LightningModule):
         
         weighted_loss = loss + diversity_loss * 0.001
         self.manual_backward(weighted_loss)
+        
+        # Clip gradients
+        torch.nn.utils.clip_grad_norm_(self.parameters(), 1)
+        
         opt.step()
         
         # calculate accuracy
@@ -68,7 +76,7 @@ class OutputShaper(pl.LightningModule):
         #                 "accuracy": acc})
     
     def configure_optimizers(self):
-        return SophiaG(self.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-1)
+        return SophiaG(self.parameters(), lr=5e-5, betas=(0.965, 0.99), rho = 0.01, weight_decay=1e-3)
     
     def compute_accuracy(self, y_pred, y_true, mask):
         # Flatten the predictions and true values
